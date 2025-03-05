@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WebSocket Test</title>
+</head>
+<body>
+    <h1>WebSocket Test</h1>
+    <div id="messages"></div>
+    <script>
+        const ws = new WebSocket('ws://localhost:3000');
+        
+        ws.onopen = () => {
+            console.log('Connected to WebSocket');
+            ws.send(JSON.stringify({ type: 'hello' }));
+        };
+        
+        ws.onmessage = (event) => {
+            const messages = document.getElementById('messages');
+            messages.innerHTML += `<p>Received: ${event.data}</p>`;
+        };
+        
+        ws.onerror = (error) => {
+            console.error('WebSocket error:', error);
+        };
+        
+        ws.onclose = () => {
+            console.log('Disconnected from WebSocket');
+        };
+    </script>
+</body>
+</html>

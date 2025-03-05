@@ -1,0 +1,44 @@
+{
+  "name": "03-polling_system",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node-dev --respawn src/index.ts",
+    "test": "ts-node public/test.html"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/KudaChan/Polling_Party.git"
+  },
+  "keywords": [],
+  "author": "Chandan Kumar",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/KudaChan/Polling_Party/issues"
+  },
+  "homepage": "https://github.com/KudaChan/Polling_Party#readme",
+  "description": "Backend system that supports a high-concurrency polling feature using Kafka and Zookeeper. The system should allow multiple users to interact with polls simultaneously, ensure resiliency in case of failures, and include real-time poll updates using WebSockets along with a leaderboard feature. The system should ensure no votes are lost, even in the event of system failures.",
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/kafkajs": "^1.8.2",
+    "@types/node": "^22.13.9",
+    "@types/pg": "^8.11.11",
+    "@types/ws": "^8.5.14",
+    "ts-node": "^10.9.2",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.8.2"
+  },
+  "overrides": {
+    "glob": "^9.3.5",
+    "rimraf": "^5.0.0"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "kafkajs": "^2.2.4",
+    "pg": "^8.13.3",
+    "ws": "^8.18.1"
+  }
+}
