@@ -8,7 +8,7 @@ RUN addgroup -S client && adduser -S client -G client
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies
+# Install ALL dependencies (including devDependencies)
 RUN npm install
 
 # Copy source code
@@ -24,14 +24,15 @@ WORKDIR /usr/src/app
 
 RUN addgroup -S client && adduser -S client -G client
 
-# Copy package files
+# Copy package files and install ALL dependencies for scripts
 COPY package*.json ./
+RUN npm install
 
-# Install production dependencies only
-RUN npm install --production
-
-# Copy built files from builder stage
+# Copy built files and source files (needed for ts-node)
 COPY --from=builder /usr/src/app/dist ./dist
+COPY --from=builder /usr/src/app/src ./src
+COPY --from=builder /usr/src/app/scripts ./scripts
+COPY --from=builder /usr/src/app/tsconfig.json ./
 
 # Expose port
 EXPOSE 3000

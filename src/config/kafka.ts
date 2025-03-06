@@ -1,10 +1,17 @@
 import { Kafka } from 'kafkajs';
+import dotenv from 'dotenv';
 
-export const kafkaConfig = new Kafka({
+dotenv.config();
+
+export const kafka = new Kafka({
   clientId: process.env.KAFKA_CLIENT_ID || 'polling-app',
-  brokers: (process.env.KAFKA_BROKERS || 'kafka:29092').split(','),
+  brokers: (process.env.KAFKA_BROKERS || 'localhost:9092').split(','),
   retry: {
-    initialRetryTime: 1000,
-    retries: 10,
-  },
+    initialRetryTime: 100,
+    retries: 8
+  }
 });
+
+export const KAFKA_TOPICS = {
+  POLL_UPDATES: 'polling-updates'
+};

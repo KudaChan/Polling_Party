@@ -1,26 +1,40 @@
+export interface CreatePollDTO {
+  question: string;
+  options: string[];
+  expiredAt: Date;
+}
+
 export interface Poll {
   id: string;
   question: string;
-  options: string[];
+  options: PollOption[];
   votes: number;
+  expiredAt: Date;
   createdAt: Date;
   updatedAt: Date;
-  expiredAt: Date;
-  remark: string;
 }
 
-export interface Option {
+export interface PollOption {
   id: string;
   pollId: string;
   text: string;
   votes: number;
   createdAt: Date;
-  updatedAt: Date;
 }
 
-export interface CreatePollDTO {
+export interface PollResult {
+  id: string;
   question: string;
-  options: string[];
+  totalVotes: number;
+  options: {
+    id: string;
+    text: string;
+    votes: number;
+    percentage: number;
+  }[];
+  createdAt: Date;
   expiredAt: Date;
-  remark: string;
 }
+
+
+

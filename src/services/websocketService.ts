@@ -1,27 +1,33 @@
 import WebSocket, { WebSocketServer } from 'ws';
+import { Server } from 'http';
 
 export class WebSocketService {
-  private wss!: WebSocketServer;
+  private wss: WebSocketServer;
 
-  constructor(server: any) {
+  constructor(server: Server) {
     this.wss = new WebSocketServer({ server });
     this.initialize();
   }
 
   private initialize(): void {
     this.wss.on('connection', (ws: WebSocket) => {
-      console.log('websocket connected');
+      console.log('New WebSocket connection established');
+
+      ws.on('error', (error) => {
+        console.error('WebSocket error:', error);
+      });
 
       ws.on('close', () => {
-        console.log('websocket disconnected');
+        console.log('WebSocket connection closed');
       });
     });
   }
 
-  broadcast (message: string): void {
+  broadcast(message: any): void {
+    const messageStr = typeof message === 'string' ? message : JSON.stringify(message);
     this.wss.clients.forEach((client) => {
       if (client.readyState === WebSocket.OPEN) {
-        client.send(message);
+        client.send(messageStr);
       }
     });
   }
@@ -44,7 +50,7 @@ export class WebSocketService {
       ws.on('message', (message: WebSocket.RawData) => {
         callback(ws, message);
       });
-    })
+    });
   }
 
   close(): void {

@@ -1,97 +1,76 @@
-import { Kafka, Producer, Consumer, EachMessagePayload, KafkaMessage } from 'kafkajs';
-import { kafkaConfig } from '../config/kafka';
-import { CreateVoteDTO } from '../models/vote';
+import { Kafka, Producer, Consumer, EachMessagePayload } from 'kafkajs';
 
 export class KafkaService {
-  private kafka!: Kafka;
-  private producer!: Producer;
-  private consumer!: Consumer;
+  private kafka: Kafka;
+  private producer: Producer;
+  private consumer: Consumer;
+  private isProducerConnected: boolean = false;
+  private isConsumerConnected: boolean = false;
 
   constructor() {
-    this.kafka = kafkaConfig;
-    this.producer = this.kafka.producer({
+    this.kafka = new Kafka({
+      clientId: process.env.KAFKA_CLIENT_ID || 'polling-app',
+      brokers: (process.env.KAFKA_BROKERS || 'localhost:9092').split(','),
       retry: {
-        initialRetryTime: 1000,
-        retries: 10,
-      },
+        initialRetryTime: 100,
+        retries: 8
+      }
     });
-    this.consumer = this.kafka.consumer({
-      groupId: process.env.KAFKA_GROUP_ID || 'polling-group',
-      retry: {
-        initialRetryTime: 1000,
-        retries: 10,
-      },
+
+    this.producer = this.kafka.producer();
+    this.consumer = this.kafka.consumer({ 
+      groupId: process.env.KAFKA_GROUP_ID || 'polling-group'
     });
   }
 
-  async connectWithKafkaConsumer(retry: number = 5, interval: number = 5000): Promise<void> {
-    for (let i = 0; i < retry; i++) {
-      try {
-        await this.consumer.connect();
-        console.log('Successfully connected to Kafka');
-        return;
-      } catch (error) {
-        console.error('Error connecting to Kafka:', error);
-        if (i < retry - 1) {
-          console.log(`Retrying in ${interval / 1000} seconds...`);
-          await new Promise(resolve => setTimeout(resolve, interval));
-        }
-      }
+  async ensureProducerConnection() {
+    if (!this.isProducerConnected) {
+      await this.producer.connect();
+      this.isProducerConnected = true;
     }
-    throw new Error('Failed to connect to Kafka after multiple retries');
   }
 
-  async connectWithKafkaProducer(retry: number = 5, interval: number = 5000): Promise<void> {
-    for (let i = 0; i < retry; i++) {
-      try {
-        await this.producer.connect();
-        console.log('Successfully connected to Kafka');
-        return;
-      } catch (error) {
-        console.error('Error connecting to Kafka:', error);
-        if (i < retry - 1) {
-          console.log(`Retrying in ${interval / 1000} seconds...`);
-          await new Promise(resolve => setTimeout(resolve, interval));
-        }
-      }
+  async ensureConsumerConnection() {
+    if (!this.isConsumerConnected) {
+      await this.consumer.connect();
+      this.isConsumerConnected = true;
     }
-    throw new Error('Failed to connect to Kafka after multiple retries');
-  }
-
-  async disconnect(): Promise<void> {
-    await this.producer.disconnect();
-    console.log('Producer disconnected');
-    await this.consumer.disconnect();
-    console.log('Consumer disconnected');
   }
 
   async producerMessage(topic: string, message: string): Promise<void> {
-    try {
-      await this.connectWithKafkaProducer();
-      await this.producer.send({
-        topic,
-        messages: [{ value: message }],
-      });
-      console.log(`Message sent to ${topic}: ${message}`);
-    } catch (error) {
-      console.error(`Error sending message to ${topic}: ${error}`);
-      throw error;
-    }
+    await this.ensureProducerConnection();
+    await this.producer.send({
+      topic,
+      messages: [{ value: message }],
+    });
   }
 
-  async subscribeAndRun(topic: string, onMessage: (message: KafkaMessage) => Promise<void>): Promise<void> {
-    try {
-      await this.connectWithKafkaConsumer();
-      await this.consumer.subscribe({ topic, fromBeginning: true });
-      this.consumer.run({
-        eachMessage: async ({ message }: EachMessagePayload) => {
-          await onMessage(message);
-        },
-      });
-      console.log(`Subscribed to ${topic}`);
-    } catch (error) {
-      console.error(`Error subscribing or running consumer for topic ${topic}:`, error);
-      throw error;
+  async subscribeAndRun(topic: string, onMessage: (message: any) => Promise<void>): Promise<void> {
+    await this.ensureConsumerConnection();
+    await this.consumer.subscribe({ topic, fromBeginning: true });
+    
+    await this.consumer.run({
+      eachMessage: async ({ message }: EachMessagePayload) => {
+        try {
+          const value = message.value?.toString();
+          if (value) {
+            await onMessage(JSON.parse(value));
+          }
+        } catch (error) {
+          console.error('Error processing message:', error);
+        }
+      },
+    });
+  }
+
+  async disconnect(): Promise<void> {
+    if (this.isProducerConnected) {
+      await this.producer.disconnect();
+      this.isProducerConnected = false;
+    }
+    if (this.isConsumerConnected) {
+      await this.consumer.disconnect();
+      this.isConsumerConnected = false;
     }
   }
 }
