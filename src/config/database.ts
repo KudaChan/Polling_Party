@@ -16,14 +16,13 @@ export const poolConfig: PoolConfig = {
   user: process.env.POSTGRES_USER || 'poleparty',
   password: process.env.POSTGRES_PASSWORD || 'poleparty',
   database: process.env.POSTGRES_DB || 'poleparty',
-  max: 100, // Increased for high concurrency
+  max: 100,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 10000,
   statement_timeout: 5000,
   query_timeout: 5000,
-  ssl: process.env.NODE_ENV === 'production' ? {
-    rejectUnauthorized: false // Adjust based on your SSL setup
-  } : undefined
+  // Remove SSL configuration since local Postgres doesn't have SSL enabled
+  ssl: false
 };
 
 export const pool = new Pool(poolConfig);
