@@ -137,3 +137,6 @@ dist
 
 # scripts folder
 /scripts
+
+# package-lock.json
+package-lock.json
