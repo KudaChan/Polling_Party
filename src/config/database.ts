@@ -21,7 +21,6 @@ export const poolConfig: PoolConfig = {
   connectionTimeoutMillis: 10000,
   statement_timeout: 5000,
   query_timeout: 5000,
-  // Remove SSL configuration since local Postgres doesn't have SSL enabled
   ssl: false
 };
 
