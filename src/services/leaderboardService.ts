@@ -14,6 +14,10 @@ interface TopPollOption {
   rank: number;
 }
 
+/**
+ * Service handling leaderboard operations and real-time updates
+ * @class LeaderboardService
+ */
 export class LeaderboardService {
   private kafkaService: KafkaService;
   private websocketService: WebSocketService;
@@ -42,6 +46,12 @@ export class LeaderboardService {
     });
   }
 
+  /**
+   * Retrieves top voted options across all active polls
+   * @param {number} limit - Maximum number of results to return
+   * @returns {Promise<TopPollOption[]>} Ranked list of poll options
+   * @throws {DatabaseError} If database operation fails
+   */
   async getTopOptions(limit: number = 10): Promise<TopPollOption[]> {
     // Check cache
     if (this.leaderboardCache &&

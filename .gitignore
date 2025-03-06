@@ -134,3 +134,6 @@ dist
 
 # docker ignore
 .dockerignore
+
+# scripts folder
+/scripts
