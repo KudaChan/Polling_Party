@@ -136,7 +136,7 @@ dist
 .dockerignore
 
 # scripts folder
-/scripts
+scripts
 
 # package-lock.json
 package-lock.json
