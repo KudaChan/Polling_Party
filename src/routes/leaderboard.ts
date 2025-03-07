@@ -1,24 +1,19 @@
 import { Router, Request, Response } from 'express';
-import { LeaderboardService } from '../services/leaderboardService';
-import { ValidationError, asyncHandler } from '../utils/errorHandler';
+import { KafkaService, WebSocketService } from '../services';
+import { asyncHandler } from '../utils/errorHandler';
 
-export const leaderboardRouter = (leaderboardService: LeaderboardService): Router => {
+export const leaderboardRouter = (kafkaService: KafkaService, wss: WebSocketService): Router => {
   const router = Router();
 
+  // Health check endpoint
+  router.get('/health', (_, res) => {
+    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  });
+
   // Leaderboard API: GET /leaderboard
-  router.get('/', asyncHandler(async (req: Request, res: Response) => {
-    const limit = req.query.limit ? parseInt(req.query.limit as string) : 10;
-    
-    if (isNaN(limit) || limit < 1 || limit > 100) {
-      throw new ValidationError('Invalid limit parameter. Must be between 1 and 100');
-    }
-    
-    const leaderboard = await leaderboardService.getTopOptions(limit);
-    res.json({
-      status: 'success',
-      data: leaderboard,
-      timestamp: new Date().toISOString()
-    });
+  router.get('/', asyncHandler(async (_: Request, res: Response) => {
+    const result = await kafkaService.leaderboardConsumerActivity(wss);
+    res.json(result);
   }));
 
   return router;

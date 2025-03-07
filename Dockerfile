@@ -17,27 +17,28 @@ COPY . .
 # Build TypeScript code
 RUN npm run build
 
-# Production stage
-FROM node:18-alpine
+# Development stage
+FROM node:18-alpine as development
 
 WORKDIR /usr/src/app
 
 RUN addgroup -S client && adduser -S client -G client
 
-# Copy package files and install ALL dependencies for scripts
+# Copy package files
 COPY package*.json ./
+
+# Install dependencies
 RUN npm install
 
-# Copy built files and source files (needed for ts-node)
-COPY --from=builder /usr/src/app/dist ./dist
-COPY --from=builder /usr/src/app/src ./src
-COPY --from=builder /usr/src/app/scripts ./scripts
-COPY --from=builder /usr/src/app/tsconfig.json ./
+# Copy source code
+COPY . .
 
-# Expose port
-EXPOSE 3000
+# Create a startup script
+COPY docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
-USER client
+# Use the startup script as entrypoint
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 
 # Start the application
-CMD ["npm", "start"]
+CMD npm run dev

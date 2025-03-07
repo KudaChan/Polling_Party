@@ -1,4 +1,4 @@
-import { Pool, PoolConfig } from 'pg';
+import { Pool, PoolClient, PoolConfig } from 'pg';
 import dotenv from 'dotenv';
 import { DatabaseError } from '../utils/errorHandler';
 
@@ -7,24 +7,36 @@ dotenv.config();
 export enum TableNames {
   POLLS = 'polls',
   OPTIONS = 'poll_options',
-  VOTES = 'votes'
+  VOTES = 'votes',
+  VOTE_COUNTERS = 'votes_counters',
+  OPTION_VOTE_COUNTERS = 'option_vote_counters'
 }
 
 export const poolConfig: PoolConfig = {
   host: process.env.POSTGRES_HOST || 'localhost',
-  port: parseInt(process.env.POSTGRES_PORT || '5050'),
+  port: parseInt(process.env.POSTGRES_PORT || '5432'),
   user: process.env.POSTGRES_USER || 'poleparty',
   password: process.env.POSTGRES_PASSWORD || 'poleparty',
   database: process.env.POSTGRES_DB || 'poleparty',
-  max: 100,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 10000,
-  statement_timeout: 5000,
-  query_timeout: 5000,
+  max: 50,
+  min: 5,
+  idleTimeoutMillis: 5000,
+  connectionTimeoutMillis: 5000,
+  statement_timeout: 10000,
+  query_timeout: 10000,
   ssl: false
 };
 
 export const pool = new Pool(poolConfig);
+
+// Test database connection
+pool.on('connect', () => {
+  console.log('Database pool connected');
+});
+
+pool.on('error', (err) => {
+  console.error('Unexpected database error:', err);
+});
 
 export const executeQuery = async (query: string, values: any[] = [], retries = 3) => {
   let lastError;
@@ -47,61 +59,61 @@ export const executeQuery = async (query: string, values: any[] = [], retries = 
   throw lastError;
 };
 
-export const createTables = async () => {
+export const withTransaction = async <T>(callback: (client: PoolClient) => Promise<T>): Promise<T> => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    const result = await callback(client);
+    await client.query('COMMIT');
+    return result;
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+};
 
-    // Create polls table
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS ${TableNames.POLLS} (
+export const createTables = async () => {
+  const client = await pool.connect();
+  const queries = `
+    CREATE TABLE IF NOT EXISTS ${TableNames.POLLS} (
         id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
         question TEXT NOT NULL,
         expired_at TIMESTAMP WITH TIME ZONE NOT NULL,
-        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-        votes INTEGER DEFAULT 0
+        remarks TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
-    `);
 
-    // Create poll options table
-    await client.query(`
       CREATE TABLE IF NOT EXISTS ${TableNames.OPTIONS} (
         id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
         poll_id UUID REFERENCES ${TableNames.POLLS}(id) ON DELETE CASCADE,
-        text TEXT NOT NULL,
-        votes INTEGER DEFAULT 0,
+        option_text TEXT NOT NULL,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
-    `);
 
-    // Create votes table
-    await client.query(`
       CREATE TABLE IF NOT EXISTS ${TableNames.VOTES} (
         id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
         poll_id UUID REFERENCES ${TableNames.POLLS}(id) ON DELETE CASCADE,
+        user_id VARCHAR(255) NOT NULL,
         option_id UUID REFERENCES ${TableNames.OPTIONS}(id) ON DELETE CASCADE,
-        user_id TEXT NOT NULL,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
         UNIQUE(poll_id, user_id)
       );
-    `);
 
-    // Add unique constraint to prevent duplicate votes
-    await client.query(`
-      ALTER TABLE ${TableNames.VOTES}
-      ADD CONSTRAINT unique_user_poll_vote
-      UNIQUE (poll_id, user_id);
-    `);
+      CREATE TABLE IF NOT EXISTS ${TableNames.VOTE_COUNTERS} (
+        poll_id UUID PRIMARY KEY REFERENCES ${TableNames.POLLS}(id) ON DELETE CASCADE,
+        vote_count INTEGER DEFAULT 0
+      );
 
-    // Add indexes for frequently queried columns
-    await client.query(`
-      CREATE INDEX IF NOT EXISTS idx_votes_poll_id ON ${TableNames.VOTES} (poll_id);
-      CREATE INDEX IF NOT EXISTS idx_votes_user_id ON ${TableNames.VOTES} (user_id);
-      CREATE INDEX IF NOT EXISTS idx_poll_options_poll_id ON ${TableNames.OPTIONS} (poll_id);
-      CREATE INDEX IF NOT EXISTS idx_polls_expired_at ON ${TableNames.POLLS} (expired_at);
-    `);
-
+      CREATE TABLE IF NOT EXISTS ${TableNames.OPTION_VOTE_COUNTERS} (
+        option_id UUID PRIMARY KEY REFERENCES ${TableNames.OPTIONS}(id) ON DELETE CASCADE,
+        vote_count INTEGER DEFAULT 0
+      );
+  `;
+  try {
+    await client.query('BEGIN');
+    await client.query(queries);
     await client.query('COMMIT');
     console.log('Database tables created successfully');
   } catch (error) {

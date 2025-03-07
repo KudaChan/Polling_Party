@@ -1,32 +1,23 @@
 import express from 'express';
 import cors from 'cors';
 import { createServer } from 'http';
-import { KafkaService, LeaderboardService, PollService, VoteService, WebSocketService } from './services';
+import { KafkaService, WebSocketService} from './services';
 import { pollRouter } from './routes/polls';
 import { leaderboardRouter } from './routes/leaderboard';
-import { errorHandler, WebSocketError, DatabaseError, KafkaError } from './utils/errorHandler';
+import { errorHandler, DatabaseError, KafkaError } from './utils/errorHandler';
 import { pool } from './config/database';
 
 export class App {
   public app: express.Application;
   public server: ReturnType<typeof createServer>;
-  private pollService: PollService;
-  private voteService: VoteService;
   private kafkaService: KafkaService;
   private websocketService: WebSocketService;
-  private leaderboardService: LeaderboardService;
 
   constructor() {
     this.app = express();
     this.server = createServer(this.app);
     this.kafkaService = new KafkaService();
     this.websocketService = new WebSocketService(this.server);
-    this.pollService = new PollService();
-    this.voteService = new VoteService(this.kafkaService);
-    this.leaderboardService = new LeaderboardService(
-      this.kafkaService,
-      this.websocketService
-    );
 
     this.initializeMiddlewares();
     this.initializeRoutes();
@@ -39,44 +30,53 @@ export class App {
     this.app.use(express.json());
     this.app.use(express.urlencoded({ extended: true }));
 
-    this.app.use((req) => {
+    this.app.use((req, _res, next) => {
       console.log(`${req.method} ${req.url}`);
+      next();
     });
   }
 
   private initializeRoutes(): void {
-    this.app.use('/polls', pollRouter(this.pollService));
-    this.app.use('/leaderboard', leaderboardRouter(this.leaderboardService));
+    // Add health check endpoint
+    this.app.get('/health', (_, res) => {
+      res.json({ status: 'ok', timestamp: new Date().toISOString() });
+    });
+
+    // Register routes
+    this.app.use('/polls', pollRouter(this.kafkaService));
+    this.app.use('/leaderboard', leaderboardRouter(this.kafkaService, this.websocketService));
   }
 
   private initializeWebSocket(): void {
-    this.websocketService.onMessage(async (ws, message) => {
-      try {
-        const data = JSON.parse(message.toString());
-        const { pollId, optionId, userId } = data;
+    this.websocketService.wss.on('connection', (ws) => {
+      console.log('New WebSocket client connected');
 
-        if (!pollId || !optionId || !userId) {
-          throw new WebSocketError('Missing required fields: pollId, optionId, or userId');
-        }
-
-        const result = await this.voteService.recordVote({ pollId, optionId, userId });
-
-        if ('error' in result) {
+      // Send initial leaderboard data on connection
+      this.kafkaService.leaderboardConsumerActivity(this.websocketService)
+        .then(initialData => {
           ws.send(JSON.stringify({
-            status: 'error',
-            message: result.error
+            type: 'LEADERBOARD_INIT',
+            data: initialData
           }));
-          return;
-        }
+        })
+        .catch(error => {
+          console.error('Error sending initial leaderboard data:', error);
+        });
 
-        ws.send(JSON.stringify({ status: 'success', data: result }));
-      } catch (error) {
+      // Handle client disconnection
+      ws.on('close', () => {
+        console.log('Client disconnected');
+      });
+
+      // Handle connection errors
+      ws.on('error', (error) => {
         console.error('WebSocket error:', error);
-        ws.send(JSON.stringify({
-          status: 'error',
-          message: error instanceof Error ? error.message : 'Unknown error occurred'
-        }));
-      }
+      });
+
+      // Optional: Handle incoming messages from clients
+      ws.on('message', (message) => {
+        console.log('Received message from client:', message.toString());
+      });
     });
   }
 
@@ -91,11 +91,10 @@ export class App {
       console.log('Database connection successful');
       client.release();
 
-      // Connect to Kafka
-      await this.kafkaService.ensureProducerConnection();
-      console.log('Kafka producer connection successful');
+      await this.kafkaService.adminActivity();
+      await this.kafkaService.consumerActivity();
 
-      this.server.listen(port, () => {
+      this.server.listen(port, '0.0.0.0', () => {
         console.log(`Server is running on port ${port}`);
       });
 

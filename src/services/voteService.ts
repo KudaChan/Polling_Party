@@ -1,95 +1,71 @@
-import { pool } from '../config/database';
+import { withTransaction, TableNames } from '../config/database';
 import { CreateVoteDTO } from '../models/vote';
-import { KafkaService } from './kafkaService';
-import { KAFKA_TOPICS } from '../config/kafka';
 
 /**
- * Service handling vote operations with race condition protection
+ * Service handling vote operations
  * @class VoteService
  */
 export class VoteService {
-  private kafkaService: KafkaService;
-
-  constructor(kafkaService: KafkaService) {
-    this.kafkaService = kafkaService;
-  }
 
   /**
-   * Records a vote with transaction safety and publishes event
+   * Records a vote with transaction safety
    * @param {CreateVoteDTO} voteData - Vote data including poll, option and user IDs
-   * @returns {Promise<{id: string} | {error: string}>} Vote result or error
-   * @throws {DatabaseError} If database operation fails
+   * @returns {Promise<{id: string}>} Vote result
+   * @throws {Error} If vote recording fails
    */
-  async recordVote(voteData: CreateVoteDTO): Promise<{ id: string } | { error: string }> {
-    const client = await pool.connect();
-
-    try {
-      await client.query('BEGIN ISOLATION LEVEL SERIALIZABLE');
-
-      // Check if poll is still active
-      const pollStatus = await client.query(
-        `SELECT expired_at FROM polls WHERE id = $1 FOR UPDATE`,
-        [voteData.pollId]
-      );
-
-      if (!pollStatus.rows.length || pollStatus.rows[0].expired_at < new Date()) {
-        await client.query('ROLLBACK');
-        return { error: 'Poll has expired or does not exist' };
+  async recordVote(voteData: CreateVoteDTO): Promise<{ id: string }> {
+    return withTransaction(async (client) => {
+      // Validate input data
+      if (!voteData.poll_id || !voteData.option_id || !voteData.user_id) {
+        throw new Error('Invalid vote data');
       }
 
-      // Atomic vote insertion
+      // Check if poll has expired
+      const pollResult = await client.query(
+        `SELECT expired_at FROM ${TableNames.POLLS} WHERE id = $1`,
+        [voteData.poll_id]
+      );
+      if (pollResult.rows.length === 0 || pollResult.rows[0].expired_at <= new Date()) {
+        throw new Error('Poll has expired');
+      }
+
+      // Check if option exists in the poll
+      const optionResult = await client.query(
+        `SELECT id FROM ${TableNames.OPTIONS} WHERE poll_id = $1 AND id = $2`,
+        [voteData.poll_id, voteData.option_id]
+      );
+      if (optionResult.rows.length === 0) {
+        throw new Error('Invalid option for the poll');
+      }
+
+      // Check if user has already voted in the poll
+      const existingVote = await client.query(
+        `SELECT id FROM ${TableNames.VOTES} WHERE poll_id = $1 AND user_id = $2`,
+        [voteData.poll_id, voteData.user_id]
+      );
+      if (existingVote.rows.length > 0) {
+        throw new Error('User has already voted on this poll');
+      }
+
+      // Insert the vote
       const voteResult = await client.query(
-        `INSERT INTO votes (poll_id, option_id, user_id)
-         VALUES ($1, $2, $3)
-         ON CONFLICT (poll_id, user_id) DO NOTHING
-         RETURNING id`,
-        [voteData.pollId, voteData.optionId, voteData.userId]
+        `INSERT INTO ${TableNames.VOTES} (poll_id, option_id, user_id) VALUES ($1, $2, $3) RETURNING id`,
+        [voteData.poll_id, voteData.option_id, voteData.user_id]
       );
 
-      if (voteResult.rows.length === 0) {
-        await client.query('ROLLBACK');
-        return { error: 'User has already voted on this poll' };
-      }
-
-      // Atomic counter updates with optimistic locking
-      const updateResult = await client.query(
-        `WITH updated_option AS (
-           UPDATE poll_options 
-           SET votes = votes + 1
-           WHERE id = $1
-           RETURNING poll_id
-         )
-         UPDATE polls 
-         SET votes = votes + 1
-         WHERE id = (SELECT poll_id FROM updated_option)
-         RETURNING id`,
-        [voteData.optionId]
+      // Update the vote counter
+      await client.query(
+        `UPDATE ${TableNames.OPTION_VOTE_COUNTERS} SET vote_count = vote_count + 1 WHERE option_id = $1`,
+        [voteData.option_id]
       );
 
-      if (!updateResult.rows.length) {
-        await client.query('ROLLBACK');
-        return { error: 'Failed to update vote counts' };
-      }
-
-      await client.query('COMMIT');
-
-      // Asynchronously publish to Kafka - don't wait for it
-      this.kafkaService.producerMessage(KAFKA_TOPICS.POLL_UPDATES, JSON.stringify({
-        type: 'VOTE_RECORDED',
-        data: voteData,
-        timestamp: new Date().toISOString()
-      })).catch(error => {
-        console.error('Failed to publish vote event:', error);
-        // Consider adding to a dead letter queue
-      });
+      // Update the total vote counter
+      await client.query(
+        `UPDATE ${TableNames.VOTE_COUNTERS} SET vote_count = vote_count + 1 WHERE poll_id = $1`,
+        [voteData.poll_id]
+      );
 
       return { id: voteResult.rows[0].id };
-
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
-    }
+    })
   }
 }
