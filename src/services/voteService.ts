@@ -12,6 +12,10 @@ export class VoteService {
    * @param {CreateVoteDTO} voteData - Vote data including poll, option and user IDs
    * @returns {Promise<{id: string}>} Vote result
    * @throws {Error} If vote recording fails
+   * @throws {Error} If vote data is invalid
+   * @throws {Error} If poll has expired
+   * @throws {Error} If option does not exist in the poll
+   * @throws {Error} If user has already voted in the poll
    */
   async recordVote(voteData: CreateVoteDTO): Promise<{ id: string }> {
     return withTransaction(async (client) => {

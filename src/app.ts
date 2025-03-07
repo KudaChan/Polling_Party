@@ -7,12 +7,20 @@ import { leaderboardRouter } from './routes/leaderboard';
 import { errorHandler, DatabaseError, KafkaError } from './utils/errorHandler';
 import { pool } from './config/database';
 
+/**
+ * Main application class that initializes and configures the Express server,
+ * WebSocket connections, Kafka services, and database connections.
+ */
 export class App {
   public app: express.Application;
   public server: ReturnType<typeof createServer>;
   private kafkaService: KafkaService;
   private websocketService: WebSocketService;
 
+  /**
+   * Initializes the application by setting up Express, HTTP server,
+   * Kafka service, and WebSocket service.
+   */
   constructor() {
     this.app = express();
     this.server = createServer(this.app);
@@ -25,6 +33,10 @@ export class App {
     this.initializeErrorHandling();
   }
 
+  /**
+   * Sets up Express middleware for CORS, JSON parsing, URL encoding,
+   * and request logging.
+   */
   private initializeMiddlewares(): void {
     this.app.use(cors({ origin: '*' }));
     this.app.use(express.json());
@@ -36,6 +48,10 @@ export class App {
     });
   }
 
+  /**
+   * Configures API routes including health check endpoint,
+   * poll routes, and leaderboard routes.
+   */
   private initializeRoutes(): void {
     // Add health check endpoint
     this.app.get('/health', (_, res) => {
@@ -47,6 +63,10 @@ export class App {
     this.app.use('/leaderboard', leaderboardRouter(this.kafkaService, this.websocketService));
   }
 
+  /**
+   * Initializes WebSocket connections and sets up event handlers for
+   * client connections, disconnections, errors, and messages.
+   */
   private initializeWebSocket(): void {
     this.websocketService.wss.on('connection', (ws) => {
       console.log('New WebSocket client connected');
@@ -80,10 +100,20 @@ export class App {
     });
   }
 
+  /**
+   * Sets up global error handling middleware.
+   */
   private initializeErrorHandling(): void {
     this.app.use(errorHandler);
   }
 
+  /**
+   * Starts the application by connecting to the database,
+   * initializing Kafka services, and starting the HTTP server.
+   * @param port - The port number to listen on
+   * @throws {DatabaseError} When database connection fails
+   * @throws {KafkaError} When Kafka connection fails
+   */
   public async start(port: number): Promise<void> {
     try {
       // Test database connection
@@ -111,6 +141,11 @@ export class App {
     }
   }
 
+  /**
+   * Sets up graceful shutdown handlers for SIGTERM and SIGINT signals.
+   * Closes HTTP server, WebSocket connections, Kafka connections,
+   * and database pool in order.
+   */
   private async setupGracefulShutdown(): Promise<void> {
     const shutdown = async () => {
       console.log('Shutting down gracefully...');

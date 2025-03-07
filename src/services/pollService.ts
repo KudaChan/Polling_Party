@@ -2,15 +2,19 @@ import { withTransaction, TableNames } from '../config/database';
 import { CreatePollDTO, PollResult } from '../models/poll';
 
 /**
- * Service handling poll-related operations
+ * Service handling poll-related operations including creation and result retrieval
  * @class PollService
  */
 export class PollService {
   /**
-   * Creates a new poll with options
-   * @param {CreatePollDTO} pollData - Poll creation data
-   * @returns {Promise<{id: string, optionIds: string[]}>} Created poll ID and option IDs
+   * Creates a new poll with options and initializes vote counters
+   * @param {CreatePollDTO} pollData - Poll creation data containing question, options and expiration date
+   * @returns {Promise<{id: string, optionIds: string[]}>} Created poll ID and array of option IDs
+   * @throws {Error} If poll data is invalid
+   * @throws {Error} If poll expiration date is invalid
+   * @throws {Error} If poll with same question already exists
    * @throws {Error} If poll creation fails
+   * @throws {Error} If option creation fails
    */
   async createPoll(
     pollData: CreatePollDTO
@@ -81,6 +85,14 @@ export class PollService {
     });
   }
 
+  /**
+   * Retrieves poll results including vote counts for each option
+   * @param {string} pollId - Unique identifier of the poll
+   * @returns {Promise<PollResult>} Poll details including question, options, vote counts and timestamps
+   * @throws {Error} If poll ID is invalid
+   * @throws {Error} If poll does not exist
+   * @throws {Error} If fetching poll results fails
+   */
   async getPollResults(pollId: string): Promise<PollResult> {
     return withTransaction(async client => {
       // Check if requested id is valid

@@ -1,6 +1,13 @@
 import { createTables } from './src/config/database';
 import { App } from './src/app';
 
+/**
+ * Initializes and starts the application
+ * 1. Creates database tables
+ * 2. Initializes the Express application
+ * 3. Starts the server on the specified port
+ * @throws {Error} If initialization fails
+ */
 async function bootstrap() {
   try {
     // Create and initialize tables

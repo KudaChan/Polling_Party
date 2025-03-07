@@ -4,6 +4,9 @@ import { DatabaseError } from '../utils/errorHandler';
 
 dotenv.config();
 
+/**
+ * Enum for database table names to ensure consistency across the application
+ */
 export enum TableNames {
   POLLS = 'polls',
   OPTIONS = 'poll_options',
@@ -12,21 +15,28 @@ export enum TableNames {
   OPTION_VOTE_COUNTERS = 'option_vote_counters'
 }
 
+/**
+ * PostgreSQL connection pool configuration
+ * Uses environment variables with fallback values
+ */
 export const poolConfig: PoolConfig = {
   host: process.env.POSTGRES_HOST || 'localhost',
   port: parseInt(process.env.POSTGRES_PORT || '5432'),
   user: process.env.POSTGRES_USER || 'poleparty',
   password: process.env.POSTGRES_PASSWORD || 'poleparty',
   database: process.env.POSTGRES_DB || 'poleparty',
-  max: 50,
-  min: 5,
-  idleTimeoutMillis: 5000,
-  connectionTimeoutMillis: 5000,
-  statement_timeout: 10000,
-  query_timeout: 10000,
-  ssl: false
+  max: 50,                              // Maximum number of clients in the pool
+  min: 5,                               // Minimum number of idle clients to maintain
+  idleTimeoutMillis: 5000,              // Time a client can remain idle before being closed
+  connectionTimeoutMillis: 5000,        // Time to wait for a connection
+  statement_timeout: 10000,             // Maximum time for statement execution
+  query_timeout: 10000,                 // Maximum time for query execution
+  ssl: false                            // SSL connection setting
 };
 
+/**
+ * Create and export the connection pool instance
+ */
 export const pool = new Pool(poolConfig);
 
 // Test database connection
@@ -38,6 +48,14 @@ pool.on('error', (err) => {
   console.error('Unexpected database error:', err);
 });
 
+/**
+ * Executes a database query with retry logic
+ * @param query - SQL query string
+ * @param values - Array of values to be used in the query
+ * @param retries - Number of retry attempts (default: 3)
+ * @returns Query result
+ * @throws DatabaseError if all retry attempts fail
+ */
 export const executeQuery = async (query: string, values: any[] = [], retries = 3) => {
   let lastError;
   for (let attempt = 1; attempt <= retries; attempt++) {
@@ -59,6 +77,13 @@ export const executeQuery = async (query: string, values: any[] = [], retries = 
   throw lastError;
 };
 
+/**
+ * Executes a callback function within a database transaction
+ * Automatically handles COMMIT and ROLLBACK
+ * @param callback - Function to execute within the transaction
+ * @returns Result of the callback function
+ * @throws Error if transaction fails
+ */
 export const withTransaction = async <T>(callback: (client: PoolClient) => Promise<T>): Promise<T> => {
   const client = await pool.connect();
   try {
@@ -74,6 +99,11 @@ export const withTransaction = async <T>(callback: (client: PoolClient) => Promi
   }
 };
 
+/**
+ * Creates database tables if they don't exist
+ * Sets up the schema for polls, options, votes, and vote counters
+ * @throws DatabaseError if table creation fails
+ */
 export const createTables = async () => {
   const client = await pool.connect();
   const queries = `

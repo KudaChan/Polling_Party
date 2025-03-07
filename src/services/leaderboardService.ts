@@ -1,8 +1,18 @@
 import { withTransaction, TableNames } from '../config/database';
 import { LeaderboardResult } from '../models/poll';
 
+/**
+ * Service for managing and retrieving leaderboard data
+ */
 export class LeaderboardService {
 
+  /**
+   * Retrieves the current leaderboard showing top 10 poll options by vote count
+   * @returns {Promise<LeaderboardResult>} Object containing leaderboard data and timestamp
+   * - data: Array of poll options with their vote counts
+   * - timestamp: ISO string of when the leaderboard was generated
+   * @throws {Error} If database query fails
+   */
   async getLeaderboard(): Promise<LeaderboardResult> {
     return withTransaction(async (client) => {
       const query = `

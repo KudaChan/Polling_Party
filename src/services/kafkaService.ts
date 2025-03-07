@@ -9,7 +9,9 @@ import { LeaderboardService } from './leaderboardService';
 
 dotenv.config();
 
-
+/**
+ * Service for managing Kafka messaging operations including poll creation and voting
+ */
 export class KafkaService {
   private kafka: Kafka;
   private admin: Admin;
@@ -18,6 +20,9 @@ export class KafkaService {
   private consumer: Consumer;
   private leaderboardConsumer: Consumer;
 
+  /**
+   * Initializes Kafka clients with configuration from environment variables
+   */
   constructor() {
     this.kafka = new Kafka({
       clientId: process.env.KAFKA_CLIENT_ID || 'polling-app',
@@ -79,6 +84,10 @@ export class KafkaService {
     });
   }
 
+  /**
+   * Connects to Kafka admin client and ensures required topics exist
+   * @throws {Error} If connection or topic creation fails
+   */
   async adminActivity(): Promise<void> {
     await this.admin.connect().then(() => {
       console.log('Kafka admin connection successful');
@@ -123,6 +132,11 @@ export class KafkaService {
     }
   }
 
+  /**
+   * Produces poll creation messages to Kafka
+   * @param data - Poll creation data
+   * @throws {Error} If producer connection or message sending fails
+   */
   async pollProducerActivity(data: CreatePollDTO): Promise<void> {
     await this.pollProducer.connect().then(() => {
       console.log('Kafka poll producer connection successful');
@@ -130,7 +144,6 @@ export class KafkaService {
       console.error('Failed to connect to Kafka poll producer:', error);
     });
 
-    // Convert the date to ISO string if it's a string already, or call toISOString if it's a Date
     const expiredAt = data.expired_at instanceof Date
       ? data.expired_at.toISOString()
       : data.expired_at;
@@ -156,6 +169,11 @@ export class KafkaService {
     });
   }
 
+  /**
+   * Produces vote messages to Kafka
+   * @param data - Vote data
+   * @throws {Error} If producer connection or message sending fails
+   */
   async voteProducerActivity(data: CreateVoteDTO): Promise<void> {
     await this.voteProducer.connect().then(() => {
       console.log('Kafka vote producer connection successful');
@@ -184,8 +202,11 @@ export class KafkaService {
     });
   }
 
+  /**
+   * Consumes messages from Kafka and processes poll creation and voting
+   * @throws {Error} If consumer connection, subscription, or message processing fails
+   */
   async consumerActivity(): Promise<void> {
-    // Use one consumer (could be pollConsumer, for example)
     await this.consumer.connect().then(() => {
       console.log('Kafka consumer connection successful');
     }).catch(error => {
@@ -208,9 +229,7 @@ export class KafkaService {
           return;
         }
 
-        // Deal with messages according to partition
         if (partition === 0) {
-          // Handle poll creation messages
           const pollData = JSON.parse(message.value.toString('utf-8'));
           console.log(`Processing poll creation from partition ${partition}`);
           const pollService = new PollService();
@@ -221,7 +240,6 @@ export class KafkaService {
             console.error('Failed to create poll:', error);
           }
         } else if (partition === 1) {
-          // Handle vote messages
           const voteData = JSON.parse(message.value.toString('utf-8'));
           console.log(`Processing vote from partition ${partition}`);
           const voteService = new VoteService();
@@ -240,11 +258,16 @@ export class KafkaService {
     });
   }
 
+  /**
+   * Consumes vote messages and updates leaderboard via WebSocket
+   * @param wss - WebSocket service instance
+   * @returns Initial leaderboard data
+   * @throws {Error} If consumer connection, subscription, or message processing fails
+   */
   async leaderboardConsumerActivity(wss: WebSocketService): Promise<LeaderboardResult> {
     const leaderboardService = new LeaderboardService();
     const result = await leaderboardService.getLeaderboard();
 
-    // Subscribe to vote updates
     await this.leaderboardConsumer.subscribe({
       topic: 'polling-updates',
       fromBeginning: true
@@ -258,9 +281,7 @@ export class KafkaService {
       eachMessage: async ({ partition, message }) => {
         if (message.value === null) return;
 
-        // Only process vote messages
         if (partition === 1) {
-          // Get updated leaderboard after each vote
           const updatedLeaderboard = await leaderboardService.getLeaderboard();
           wss.sendLeaderboardUpdate(updatedLeaderboard);
         }
@@ -274,6 +295,10 @@ export class KafkaService {
     return result;
   }
 
+  /**
+   * Disconnects all Kafka clients
+   * @throws {Error} If disconnection fails
+   */
   async disconnect(): Promise<void> {
     try {
       if (this.pollProducer) {

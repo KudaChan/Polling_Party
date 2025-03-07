@@ -4,14 +4,33 @@ import { KafkaService, PollService } from '../services';
 import { CreatePollDTO } from '../models/poll';
 import { CreateVoteDTO } from '../models/vote';
 
+/**
+ * Creates and configures the poll router
+ * @param kafkaService - Service for handling Kafka messaging operations
+ * @returns Express Router configured with poll endpoints
+ */
 export const pollRouter = (kafkaService: KafkaService): Router => {
   const router = Router();
 
+  /**
+   * Health check endpoint
+   * @route GET /health
+   * @returns {Object} Status object with timestamp
+   */
   router.get('/health', (_, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
   });
 
-  // Create Poll API: POST /polls
+  /**
+   * Creates a new poll
+   * @route POST /polls
+   * @param {Object} req.body - Poll creation request body
+   * @param {string} req.body.question - Poll question
+   * @param {string[]} req.body.options - Array of poll options
+   * @param {string} req.body.expired_at - Poll expiration date
+   * @throws {ValidationError} If request data is invalid
+   * @returns {Promise<Object>} Created poll data
+   */
   router.post('/', asyncHandler(async (req: Request, res: Response) => {
     const { question, options, expired_at } = req.body;
 
@@ -55,7 +74,13 @@ export const pollRouter = (kafkaService: KafkaService): Router => {
     res.status(201).json(result);
   }));
 
-  // Poll Results API: GET /polls/{id}
+  /**
+   * Retrieves poll results
+   * @route GET /polls/:id
+   * @param {string} req.params.id - Poll ID
+   * @throws {ValidationError} If poll ID is missing
+   * @returns {Promise<Object>} Poll results including options and vote counts
+   */
   router.get('/:id', asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
 
@@ -70,7 +95,16 @@ export const pollRouter = (kafkaService: KafkaService): Router => {
     });
   }));
 
-  // Vote API: POST /polls/{id}/vote
+  /**
+   * Records a vote for a poll option
+   * @route POST /polls/:id/vote
+   * @param {string} req.params.id - Poll ID
+   * @param {Object} req.body - Vote data
+   * @param {string} req.body.option_id - Selected option ID
+   * @param {string} req.body.user_id - Voting user ID
+   * @throws {ValidationError} If required parameters are missing
+   * @returns {Promise<Object>} Vote confirmation
+   */
   router.post('/:id/vote', asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
     const voteData: CreateVoteDTO = req.body;
