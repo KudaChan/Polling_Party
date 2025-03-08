@@ -6,6 +6,7 @@ import { PollService } from './pollService';
 import { VoteService } from './voteService';
 import { WebSocketService } from './websocketService';
 import { LeaderboardService } from './leaderboardService';
+import { KafkaError } from '../utils/errorHandler';
 
 dotenv.config();
 
@@ -93,6 +94,7 @@ export class KafkaService {
       console.log('Kafka admin connection successful');
     }).catch(error => {
       console.error('Failed to connect to Kafka admin:', error);
+      throw new KafkaError('Failed to connect to Kafka admin');
     });
 
     try {
@@ -142,6 +144,7 @@ export class KafkaService {
       console.log('Kafka poll producer connection successful');
     }).catch(error => {
       console.error('Failed to connect to Kafka poll producer:', error);
+      throw new KafkaError('Failed to connect to Kafka poll producer');
     });
 
     const expiredAt = data.expired_at instanceof Date
@@ -166,6 +169,7 @@ export class KafkaService {
       console.log('Sent message to Kafka topic: polling-updates');
     }).catch(error => {
       console.error('Failed to send message to Kafka topic: polling-updates', error);
+      throw new KafkaError('Failed to send message to Kafka topic: polling-updates');
     });
   }
 
@@ -179,6 +183,7 @@ export class KafkaService {
       console.log('Kafka vote producer connection successful');
     }).catch(error => {
       console.error('Failed to connect to Kafka vote producer:', error);
+      throw new KafkaError('Failed to connect to Kafka vote producer');
     });
 
     const message = JSON.stringify({
@@ -199,6 +204,7 @@ export class KafkaService {
       console.log('Sent message to Kafka topic: polling-updates');
     }).catch(error => {
       console.error('Failed to send message to Kafka topic: polling-updates', error);
+      throw new KafkaError('Failed to send message to Kafka topic: polling-updates');
     });
   }
 
@@ -211,6 +217,7 @@ export class KafkaService {
       console.log('Kafka consumer connection successful');
     }).catch(error => {
       console.error('Failed to connect to Kafka consumer:', error);
+      throw new KafkaError('Failed to connect to Kafka consumer');
     });
 
     await this.consumer.subscribe({
@@ -220,6 +227,7 @@ export class KafkaService {
       console.log('Subscribed to Kafka topic: polling-updates');
     }).catch(error => {
       console.error('Failed to subscribe to Kafka topic: polling-updates', error);
+      throw new KafkaError('Failed to subscribe to Kafka topic: polling-updates');
     });
 
     await this.consumer.run({
@@ -255,6 +263,7 @@ export class KafkaService {
       }
     }).catch(error => {
       console.error('Failed to run Kafka consumer:', error);
+      throw new KafkaError('Failed to run Kafka consumer');
     });
   }
 
@@ -275,6 +284,7 @@ export class KafkaService {
       console.log('Subscribed to Kafka topic: polling-updates');
     }).catch(error => {
       console.error('Failed to subscribe to Kafka topic: polling-updates', error);
+      throw new KafkaError('Failed to subscribe to Kafka topic: polling-updates');
     });
 
     await this.leaderboardConsumer.run({
@@ -290,6 +300,7 @@ export class KafkaService {
       console.log('Leaderboard consumer started');
     }).catch(error => {
       console.error('Failed to run leaderboard consumer:', error);
+      throw new KafkaError('Failed to run leaderboard consumer');
     });
 
     return result;

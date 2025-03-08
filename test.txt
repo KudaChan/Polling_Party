@@ -1,16 +1,16 @@
 curl -X POST http://localhost:3000/polls \
 -H "Content-Type: application/json" \
 -d '{
-  "question": "What is your favorite programming lan?",
+  "question": "What is your favorite programming language?",
   "options": ["JavaScript", "Python", "Java", "Go", "Rust"],
-  "expired_at": "2025-03-30T00:00:00.000Z"
+  "expired_at": "2030-03-30T00:00:00.000Z"
 }'
 
-curl -X POST http://localhost:3000/polls/918988f3-a7f9-404b-a0ac-967509144076/vote \
+curl -X POST http://localhost:3000/polls/8be1bf01-834e-4c12-ade1-e4f5f4a4df50/vote \
 -H "Content-Type: application/json" \
 -d '{
   "user_id": "user123",
-  "option_id": "7331a5fe-f289-4e89-8c92-521fd58b733d"
+  "option_id": "116cfaf2-e6f2-4ff5-a56b-ab2dbadc4a95"
 }'
 
-curl http://localhost:3000/polls/918988f3-a7f9-404b-a0ac-967509144076
+curl http://localhost:3000/polls/8be1bf01-834e-4c12-ade1-e4f5f4a4df50

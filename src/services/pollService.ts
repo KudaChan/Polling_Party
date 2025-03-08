@@ -1,5 +1,6 @@
-import { withTransaction, TableNames } from '../config/database';
+import { withTransaction, DBQueries } from '../config/database';
 import { CreatePollDTO, PollResult } from '../models/poll';
+import { DatabaseError, ValidationError } from '../utils/errorHandler';
 
 /**
  * Service handling poll-related operations including creation and result retrieval
@@ -22,28 +23,26 @@ export class PollService {
     return withTransaction(async client => {
       // Check if poll creation data is valid
       if (!pollData.question || !pollData.options || pollData.options.length < 2) {
-        throw new Error('Invalid poll data');
+        throw new ValidationError('Invalid poll data');
       }
 
       // Check if poll expiration date is valid
       if (!pollData.expired_at || pollData.expired_at <= new Date()) {
-        throw new Error('Invalid poll expiration date');
+        throw new ValidationError('Invalid poll expiration date');
       }
 
       // Check if poll already exists with the same question and options
       const existingPoll = await client.query(
-        `SELECT id FROM ${TableNames.POLLS} WHERE question = $1`,
+        DBQueries.isPollExist(),
         [pollData.question]
       );
       if (existingPoll.rows.length > 0) {
-        throw new Error('Poll already exists');
+        throw new DatabaseError('Poll already exists');
       }
 
       // Insert poll
       const pollResult = await client.query(
-        `INSERT INTO ${TableNames.POLLS} (question, expired_at)
-          VALUES ($1, $2)
-          RETURNING id;`,
+        DBQueries.insetIntoPoll(),
         [pollData.question, pollData.expired_at]
       );
 
@@ -51,16 +50,14 @@ export class PollService {
 
       // Check if poll creation was successful
       if (!pollId) {
-        throw new Error('Failed to create poll');
+        throw new DatabaseError('Failed to create poll');
       }
 
       // Insert options
       const optionIds: string[] = [];
       for (const optionText of pollData.options) {
         const optionResult = await client.query(
-          `INSERT INTO ${TableNames.OPTIONS} (poll_id, option_text)
-            VALUES ($1, $2)
-            RETURNING id;`,
+          DBQueries.insetIntoOptions(),
           [pollId, optionText]
         );
         optionIds.push(optionResult.rows[0].id);
@@ -68,16 +65,16 @@ export class PollService {
 
       // Check if option creation was successful
       if (optionIds.length !== pollData.options.length) {
-        throw new Error('Failed to create options');
+        throw new DatabaseError('Failed to create options');
       }
 
       // Update vote counters table
       await client.query(
-        `INSERT INTO ${TableNames.VOTE_COUNTERS} (poll_id) VALUES ($1)`,
+        DBQueries.insertPollIntoVoteCounter(),
         [pollId]
       );
       await client.query(
-        `INSERT INTO ${TableNames.OPTION_VOTE_COUNTERS} (option_id) SELECT id FROM ${TableNames.OPTIONS} WHERE poll_id = $1`,
+        DBQueries.insertOptionIntoOptionVoteCounter(),
         [pollId]
       );
 
@@ -97,45 +94,25 @@ export class PollService {
     return withTransaction(async client => {
       // Check if requested id is valid
       if (!pollId) {
-        throw new Error('Invalid poll ID');
+        throw new ValidationError('Invalid poll ID');
       }
 
       // Check if poll exists
       const pollExists = await client.query(
-        `SELECT id FROM ${TableNames.POLLS} WHERE id = $1`,
+        DBQueries.isPollExitWithId(),
         [pollId]
       );
       if (pollExists.rows.length === 0) {
-        throw new Error('Poll does not exist');
+        throw new DatabaseError('Poll does not exist');
       }
 
       // Fetch poll results
-      const query = `
-        SELECT
-          p.id,
-          p.question,
-          vc.vote_count as total_votes,
-          json_agg(
-            json_build_object(
-              'option_id', po.id,
-              'option_text', po.option_text,
-              'vote_count', ovc.vote_count
-            )
-          ) as options,
-          p.created_at,
-          p.expired_at
-          FROM ${TableNames.POLLS} p
-          LEFT JOIN ${TableNames.OPTIONS} po ON p.id = po.poll_id
-          LEFT JOIN ${TableNames.OPTION_VOTE_COUNTERS} ovc ON po.id = ovc.option_id
-          LEFT JOIN ${TableNames.VOTE_COUNTERS} vc ON p.id = vc.poll_id
-          WHERE p.id = $1
-          GROUP BY p.id, vc.vote_count;
-      `;
+      const query = DBQueries.getPollResultWithUnions();
 
       const result = await client.query(query, [pollId]);
 
       if (result.rows.length === 0) {
-        throw new Error('Failed to fetch poll results');
+        throw new DatabaseError('Failed to fetch poll results');
       }
 
       const row = result.rows[0];
