@@ -22,7 +22,7 @@ A high-concurrency polling system built with Node.js, TypeScript, Kafka, and Pos
 │   ├── utils/
 │   │   └── errorHandler.ts # Custom error handling
 │   ├── app.ts             # Express application setup
-│   └── index.ts           # Application entry point
+│── index.ts           # Application entry point
 ├── docker-compose.yml     # Container orchestration
 ├── Dockerfile            # Node.js application container
 ├── package.json          # Project dependencies
@@ -30,6 +30,12 @@ A high-concurrency polling system built with Node.js, TypeScript, Kafka, and Pos
 ```
 
 ## Key Components
+
+### Running the Application
+
+```bash
+docker-compose up -d
+```
 
 ### API Routes
 
@@ -137,21 +143,6 @@ POSTGRES_DB=poleparty
 KAFKA_BROKERS=kafka:29092
 KAFKA_CLIENT_ID=polling-app
 KAFKA_GROUP_ID=polling-group
-```
-
-### Running the Application
-
-1.Development:
-
-```bash
-npm install
-npm run dev
-```
-
-2.Production:
-
-```bash
-docker-compose up -d
 ```
 
 ## Architecture Highlights
