@@ -33,15 +33,6 @@ A high-concurrency polling system built with Node.js, TypeScript, Kafka, and Pos
 
 ### Running the Application
 
-1. Development:
-
-```bash
-npm install
-npm run dev
-```
-
-2. Production:
-
 ```bash
 docker-compose up -d
 ```
